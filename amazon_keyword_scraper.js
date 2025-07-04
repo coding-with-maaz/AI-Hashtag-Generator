@@ -53,4 +53,9 @@
 //   console.log(`✅ Amazon Keyword API (API-based) running on http://localhost:${PORT}`)
 // );
 
+const twitterScraper = require('./twitter_scraper');
+// ... existing code ...
+app.use(twitterScraper);
+// ... existing code ...
+
 
