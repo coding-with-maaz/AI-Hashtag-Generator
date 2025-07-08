@@ -70,4 +70,16 @@ router.get('/production-ids', admobController.getProductionIds);
 // Description: Validate ad unit configuration
 router.get('/validate', validateEnvironment, admobController.validateConfig);
 
+// Route: PUT /api/admob/app-id
+// Description: Update AdMob App ID for specified environment
+router.put('/app-id', validateEnvironment, admobController.updateAppId);
+
+// Route: PUT /api/admob/ad-units/:adType
+// Description: Update specific ad unit for specified environment
+router.put('/ad-units/:adType', validateEnvironment, validateAdType, admobController.updateAdUnit);
+
+// Route: PUT /api/admob/config
+// Description: Update complete AdMob configuration for specified environment
+router.put('/config', validateEnvironment, admobController.updateConfig);
+
 module.exports = router; 

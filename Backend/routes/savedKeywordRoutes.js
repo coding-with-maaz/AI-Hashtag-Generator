@@ -36,33 +36,9 @@ const validateSearchType = (req, res, next) => {
 // Description: Save a keyword search with location and metadata
 router.post('/save', validatePlatform, validateSearchType, savedKeywordController.saveKeyword);
 
-// Route: DELETE /api/saved-keywords/:id/unsave
-// Description: Unsave/delete a saved keyword
-router.delete('/:id/unsave', savedKeywordController.unsaveKeyword);
-
-// Route: GET /api/saved-keywords
-// Description: Get all saved keywords with filtering and pagination
-router.get('/', validatePlatform, savedKeywordController.getSavedKeywords);
-
-// Route: GET /api/saved-keywords/:id
-// Description: Get a specific saved keyword by ID
-router.get('/:id', savedKeywordController.getSavedKeyword);
-
-// Route: PUT /api/saved-keywords/:id
-// Description: Update a saved keyword (title, description, tags, etc.)
-router.put('/:id', savedKeywordController.updateSavedKeyword);
-
 // Route: GET /api/saved-keywords/stats
 // Description: Get statistics about saved keywords
 router.get('/stats', savedKeywordController.getSavedKeywordsStats);
-
-// Route: POST /api/saved-keywords/:id/toggle-favorite
-// Description: Toggle favorite status of a saved keyword
-router.post('/:id/toggle-favorite', savedKeywordController.toggleFavorite);
-
-// Route: POST /api/saved-keywords/:id/merge-data
-// Description: Merge new data with existing saved keyword (skip duplicates)
-router.post('/:id/merge-data', savedKeywordController.mergeData);
 
 // Route: GET /api/saved-keywords/favorites
 // Description: Get only favorite saved keywords
@@ -93,5 +69,29 @@ router.get('/by-category/:category', validatePlatform, (req, res, next) => {
   req.query.category = req.params.category;
   next();
 }, savedKeywordController.getSavedKeywords);
+
+// Route: GET /api/saved-keywords
+// Description: Get all saved keywords with filtering and pagination
+router.get('/', validatePlatform, savedKeywordController.getSavedKeywords);
+
+// Route: GET /api/saved-keywords/:id
+// Description: Get a specific saved keyword by ID
+router.get('/:id', savedKeywordController.getSavedKeyword);
+
+// Route: PUT /api/saved-keywords/:id
+// Description: Update a saved keyword (title, description, tags, etc.)
+router.put('/:id', savedKeywordController.updateSavedKeyword);
+
+// Route: DELETE /api/saved-keywords/:id/unsave
+// Description: Unsave/delete a saved keyword
+router.delete('/:id/unsave', savedKeywordController.unsaveKeyword);
+
+// Route: POST /api/saved-keywords/:id/toggle-favorite
+// Description: Toggle favorite status of a saved keyword
+router.post('/:id/toggle-favorite', savedKeywordController.toggleFavorite);
+
+// Route: POST /api/saved-keywords/:id/merge-data
+// Description: Merge new data with existing saved keyword (skip duplicates)
+router.post('/:id/merge-data', savedKeywordController.mergeData);
 
 module.exports = router; 

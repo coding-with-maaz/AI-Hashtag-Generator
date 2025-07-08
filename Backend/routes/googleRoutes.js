@@ -40,4 +40,17 @@ router.get('/', validateQuery, (req, res) => {
   res.redirect(`/api/google/all?${new URLSearchParams(req.query).toString()}`);
 });
 
-module.exports = router; 
+// Like a keyword search
+router.post('/like', googleController.likeKeywordSearch);
+
+// Get trending keywords
+router.get('/trending', googleController.getTrendingKeywords);
+
+// Increment views for a keyword search
+router.post('/view', googleController.viewKeywordSearch);
+
+// Export handlers for global use
+module.exports = router;
+module.exports.likeKeywordSearch = googleController.likeKeywordSearch;
+module.exports.getTrendingKeywords = googleController.getTrendingKeywords;
+module.exports.viewKeywordSearch = googleController.viewKeywordSearch; 

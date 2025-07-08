@@ -109,6 +109,18 @@ const KeywordSearch = sequelize.define('KeywordSearch', {
     allowNull: false,
     defaultValue: false
   },
+  likes: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    comment: 'Anonymous like count for this keyword search'
+  },
+  views: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    comment: 'Anonymous view count for this keyword search'
+  },
   metadata: {
     type: DataTypes.JSON,
     allowNull: true,

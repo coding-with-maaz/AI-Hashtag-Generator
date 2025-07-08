@@ -1286,6 +1286,14 @@ const googleController = {
               } : null
             } : null
           } : null
+        },
+        metadata: {
+          query,
+          platform: 'google',
+          language,
+          country,
+          search_type: 'all',
+          timestamp: new Date().toISOString()
         }
       });
     } catch (error) {
@@ -1319,6 +1327,99 @@ const googleController = {
         success: false,
         error: error.message
       });
+    }
+  },
+
+  /**
+   * Like a keyword search (increment likes)
+   * @route POST /api/like
+   */
+  async likeKeywordSearch(req, res) {
+    try {
+      const { query, platform, language = 'en', country = 'us' } = req.query;
+      if (!query || !platform) {
+        return res.status(400).json({ success: false, message: 'Missing query or platform' });
+      }
+      const search = await KeywordSearch.findOne({
+        where: { query, platform, language, country }
+      });
+      if (!search) {
+        return res.status(404).json({ success: false, message: 'Keyword search not found' });
+      }
+      search.likes = (search.likes || 0) + 1;
+      await search.save();
+      return res.json({ success: true, likes: search.likes });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  /**
+   * Get trending (most liked) keyword searches
+   * @route GET /api/trending
+   */
+  async getTrendingKeywords(req, res) {
+    try {
+      const limit = parseInt(req.query.limit, 10) || 20;
+      const { query, platform, search_type, sort } = req.query;
+      const where = { likes: { [require('sequelize').Op.gt]: 0 } };
+      if (query) where.query = query;
+      if (platform && platform !== 'all') where.platform = platform;
+      if (search_type && search_type !== 'all') where.search_type = search_type;
+      let order;
+      if (sort === 'views') {
+        order = [['views', 'DESC'], ['created_at', 'DESC']];
+      } else if (sort === 'recent') {
+        order = [['created_at', 'DESC']];
+      } else {
+        order = [['likes', 'DESC'], ['created_at', 'DESC']];
+      }
+      const all = await KeywordSearch.findAll({
+        where,
+        order,
+      });
+      // Deduplicate: only keep the latest for each (query, platform, search_type)
+      const seen = new Set();
+      const trending = [];
+      for (const k of all) {
+        const key = `${k.query}|${k.platform}|${k.search_type}`;
+        if (!seen.has(key)) {
+          trending.push({
+            ...k.toJSON(),
+            created_at: k.created_at instanceof Date ? k.created_at.toISOString() : (typeof k.created_at === 'string' ? k.created_at : ''),
+            views: k.views
+          });
+          seen.add(key);
+        }
+        if (trending.length >= limit) break;
+      }
+      return res.json({ success: true, data: trending });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  /**
+   * Increment views for a keyword search
+   * @route POST /api/view
+   */
+  async viewKeywordSearch(req, res) {
+    try {
+      const { query, platform, language = 'en', country = 'us' } = req.query;
+      if (!query || !platform) {
+        return res.status(400).json({ success: false, message: 'Missing query or platform' });
+      }
+      const search = await KeywordSearch.findOne({
+        where: { query, platform, language, country }
+      });
+      if (!search) {
+        return res.status(404).json({ success: false, message: 'Keyword search not found' });
+      }
+      search.views = (search.views || 0) + 1;
+      await search.save();
+      return res.json({ success: true, views: search.views });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
     }
   }
 };

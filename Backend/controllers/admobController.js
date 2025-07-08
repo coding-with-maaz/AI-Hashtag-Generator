@@ -286,6 +286,122 @@ const admobController = {
         error: error.message
       });
     }
+  },
+
+  // PUT /api/admob/app-id
+  async updateAppId(req, res) {
+    try {
+      const { environment = 'test' } = req.query;
+      const { appId } = req.body;
+      
+      if (!appId) {
+        return res.status(400).json({
+          success: false,
+          error: 'App ID is required',
+          message: 'Please provide a valid App ID'
+        });
+      }
+
+      // Update the configuration (in a real app, this would be saved to database)
+      const config = getAdMobConfig(environment);
+      config.appId = appId;
+      
+      res.json({
+        success: true,
+        message: 'App ID updated successfully',
+        data: {
+          environment,
+          appId,
+          updatedAt: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  },
+
+  // PUT /api/admob/ad-units/:adType
+  async updateAdUnit(req, res) {
+    try {
+      const { adType } = req.params;
+      const { environment = 'test' } = req.query;
+      const { id, name, description } = req.body;
+      
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          error: 'Ad unit ID is required',
+          message: 'Please provide a valid ad unit ID'
+        });
+      }
+
+      // Update the configuration (in a real app, this would be saved to database)
+      const config = getAdMobConfig(environment);
+      if (config.adUnits[adType]) {
+        config.adUnits[adType].id = id;
+        if (name) config.adUnits[adType].name = name;
+        if (description) config.adUnits[adType].description = description;
+      }
+      
+      res.json({
+        success: true,
+        message: 'Ad unit updated successfully',
+        data: {
+          environment,
+          adType,
+          adUnit: config.adUnits[adType],
+          updatedAt: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  },
+
+  // PUT /api/admob/config
+  async updateConfig(req, res) {
+    try {
+      const { environment = 'test' } = req.query;
+      const { appId, adUnits } = req.body;
+      
+      // Update the configuration (in a real app, this would be saved to database)
+      const config = getAdMobConfig(environment);
+      
+      if (appId) {
+        config.appId = appId;
+      }
+      
+      if (adUnits && typeof adUnits === 'object') {
+        Object.keys(adUnits).forEach(adType => {
+          if (config.adUnits[adType] && adUnits[adType].id) {
+            config.adUnits[adType].id = adUnits[adType].id;
+            if (adUnits[adType].name) config.adUnits[adType].name = adUnits[adType].name;
+            if (adUnits[adType].description) config.adUnits[adType].description = adUnits[adType].description;
+          }
+        });
+      }
+      
+      res.json({
+        success: true,
+        message: 'AdMob configuration updated successfully',
+        data: {
+          environment,
+          config,
+          updatedAt: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
   }
 };
 

@@ -341,7 +341,8 @@ const savedKeywordController = {
           'id', 'query', 'platform', 'search_type', 'country', 'language',
           'location', 'title', 'description', 'tags', 'category',
           'is_favorite', 'is_public', 'view_count', 'share_count',
-          'created_at', 'updated_at', 'last_accessed'
+          'created_at', 'updated_at', 'last_accessed',
+          'keywords', 'questions', 'prepositions', 'hashtags', 'generated_hashtags'
         ]
       });
 
