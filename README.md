@@ -5,6 +5,25 @@
 ## Upcomming Frontend
 ![image](https://github.com/user-attachments/assets/69516cca-dc1e-411b-b251-9d5032a0f656)
 
+Updated Controllers:
+✅ Google Controller (googleController.js)
+✅ YouTube Controller (youtubeController.js)
+✅ Bing Controller (bingController.js)
+✅ Play Store Controller (playstoreController.js)
+✅ App Store Controller (appstoreController.js)
+Key Benefits:
+Smart Like Consolidation: Likes are automatically added to the most popular record for each keyword/platform combination
+Better Analytics: Detailed logging helps track how likes are distributed across records
+Consistent Behavior: All platforms now use the same intelligent like logic
+Backward Compatibility: Frontend components continue to work without changes
+Enhanced Debugging: Comprehensive logging makes it easy to understand what's happening
+
+✅ Like added to record with most likes: fitness (google) - Record ID: 123 - Total likes: 15
+📊 Found 3 total records for this query/platform combination
+  1. ID: 123, Likes: 15, Created: 2024-01-15, Language: en, Country: us
+  2. ID: 124, Likes: 8, Created: 2024-01-10, Language: fr, Country: fr
+  3. ID: 125, Likes: 3, Created: 2024-01-05, Language: de, Country: de
+
 
 ## Backend:
 ![image](https://github.com/user-attachments/assets/184bee3d-b221-4ef3-91ef-099f9b31ebf7)
