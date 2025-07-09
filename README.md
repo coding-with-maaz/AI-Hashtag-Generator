@@ -4,6 +4,8 @@
 
 ## Upcomming Frontend
 ![image](https://github.com/user-attachments/assets/69516cca-dc1e-411b-b251-9d5032a0f656)
+![image](https://github.com/user-attachments/assets/cd1d8c41-45ee-42dc-9497-7b38131afd8f)
+
 
 Updated Controllers:
 ✅ Google Controller (googleController.js)
