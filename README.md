@@ -2,7 +2,7 @@
 
 **Multi-Platform Keyword & Hashtag Suggestion Tool Powered by Scraping & Public APIs**
 
-## Upcomming Backend:
+## Backend:
 ![image](https://github.com/user-attachments/assets/184bee3d-b221-4ef3-91ef-099f9b31ebf7)
 
 
