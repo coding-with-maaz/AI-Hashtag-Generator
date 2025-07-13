@@ -19,20 +19,7 @@ KeywordSearch.belongsTo(User, {
   onUpdate: 'CASCADE'
 });
 
-User.hasMany(AdMobConfig, {
-  foreignKey: 'user_id',
-  as: 'admobConfigs',
-  onDelete: 'SET NULL',
-  onUpdate: 'CASCADE'
-});
-
-AdMobConfig.belongsTo(User, {
-  foreignKey: 'user_id',
-  as: 'user',
-  onDelete: 'SET NULL',
-  onUpdate: 'CASCADE'
-});
-
+// Only keep the created_by association for AdMobConfig
 AdMobConfig.belongsTo(User, {
   foreignKey: 'created_by',
   as: 'creator',

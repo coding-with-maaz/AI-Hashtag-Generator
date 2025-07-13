@@ -7,33 +7,86 @@ const {
   isValidEnvironment,
   ADMOB_CONFIG 
 } = require('../config/admob');
+const AdMobConfigModel = require('../models/AdMobConfig');
 
 // Controller methods
 const admobController = {
   // GET /api/admob/config
   async getConfig(req, res) {
     try {
-      const { environment = 'test' } = req.query;
-      const config = getAdMobConfig(environment);
+      const { environment } = req.query;
       
-      res.json({
-        success: true,
-        data: {
-          environment,
-          appId: config.appId,
-          adUnits: config.adUnits,
+      let query = {};
+      if (environment) {
+        query = { where: { environment } };
+      }
+      
+      // Fetch all configurations
+      const configs = await AdMobConfigModel.findAll(query);
+      
+      if (!configs.length) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'No AdMob configurations found' 
+        });
+      }
+
+      // If specific environment requested, return just that one
+      if (environment) {
+        const config = configs[0];
+        return res.json({
+          success: true,
+          data: config,
           metadata: {
-            totalAdUnits: Object.keys(config.adUnits).length,
-            adTypes: Object.keys(config.adUnits),
+            environment: config.environment,
             retrievedAt: new Date().toISOString()
           }
+        });
+      }
+
+      // Return all configurations
+      res.json({
+        success: true,
+        data: configs,
+        metadata: {
+          totalEnvironments: configs.length,
+          environments: configs.map(c => c.environment),
+          retrievedAt: new Date().toISOString()
         }
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        error: error.message
+      console.error('Error fetching AdMob config:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  // GET /api/admob/config/:environment
+  async getConfigByEnvironment(req, res) {
+    try {
+      const { environment } = req.params;
+      
+      const config = await AdMobConfigModel.findOne({ 
+        where: { environment } 
       });
+      
+      if (!config) {
+        return res.status(404).json({ 
+          success: false, 
+          error: `No AdMob configuration found for environment: ${environment}` 
+        });
+      }
+
+      res.json({
+        success: true,
+        data: config,
+        metadata: {
+          environment: config.environment,
+          retrievedAt: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching AdMob config by environment:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
   },
 
@@ -159,132 +212,152 @@ const admobController = {
   // GET /api/admob/test-ids
   async getTestIds(req, res) {
     try {
-      const testConfig = getAdMobConfig('test');
-      const testIds = {};
-      
-      // Extract only the IDs for easy access
-      Object.keys(testConfig.adUnits).forEach(adType => {
-        testIds[adType] = testConfig.adUnits[adType].id;
+      const testConfig = await AdMobConfigModel.findOne({ 
+        where: { environment: 'test' } 
       });
       
+      if (!testConfig) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Test environment configuration not found' 
+        });
+      }
+
+      // Extract ad unit IDs from test config
+      const adUnitIds = {};
+      const adTypes = ['banner', 'interstitial', 'appOpen', 'native', 'rewarded', 'rewardedInterstitial', 'splash'];
+      
+      adTypes.forEach(adType => {
+        const adConfig = testConfig[adType];
+        if (adConfig && adConfig.enabled && adConfig.adUnitId) {
+          adUnitIds[adType] = adConfig.adUnitId;
+        }
+      });
+
       res.json({
         success: true,
         data: {
           environment: 'test',
-          appId: testConfig.appId,
-          adUnitIds: testIds,
-          metadata: {
-            totalAdUnits: Object.keys(testIds).length,
-            adTypes: Object.keys(testIds),
-            retrievedAt: new Date().toISOString(),
-            note: 'These are Google\'s official test ad unit IDs'
-          }
+          adUnitIds,
+          globalConfig: testConfig.globalConfig
+        },
+        metadata: {
+          totalAdUnits: Object.keys(adUnitIds).length,
+          adTypes: Object.keys(adUnitIds),
+          retrievedAt: new Date().toISOString(),
+          note: 'These are Google\'s official test ad unit IDs'
         }
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
+      console.error('Error fetching test IDs:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
   },
 
   // GET /api/admob/production-ids
   async getProductionIds(req, res) {
     try {
-      const productionConfig = getAdMobConfig('production');
-      const productionIds = {};
-      
-      // Extract only the IDs for easy access
-      Object.keys(productionConfig.adUnits).forEach(adType => {
-        productionIds[adType] = productionConfig.adUnits[adType].id;
+      const prodConfig = await AdMobConfigModel.findOne({ 
+        where: { environment: 'production' } 
       });
       
+      if (!prodConfig) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Production environment configuration not found' 
+        });
+      }
+
+      // Extract ad unit IDs from production config
+      const adUnitIds = {};
+      const adTypes = ['banner', 'interstitial', 'appOpen', 'native', 'rewarded', 'rewardedInterstitial', 'splash'];
+      
+      adTypes.forEach(adType => {
+        const adConfig = prodConfig[adType];
+        if (adConfig && adConfig.enabled && adConfig.adUnitId) {
+          adUnitIds[adType] = adConfig.adUnitId;
+        }
+      });
+
       res.json({
         success: true,
         data: {
           environment: 'production',
-          appId: productionConfig.appId,
-          adUnitIds: productionIds,
-          metadata: {
-            totalAdUnits: Object.keys(productionIds).length,
-            adTypes: Object.keys(productionIds),
-            retrievedAt: new Date().toISOString(),
-            note: 'Replace placeholder IDs with your actual production ad unit IDs'
-          }
+          adUnitIds,
+          globalConfig: prodConfig.globalConfig
+        },
+        metadata: {
+          totalAdUnits: Object.keys(adUnitIds).length,
+          adTypes: Object.keys(adUnitIds),
+          retrievedAt: new Date().toISOString(),
+          note: 'Production ad unit IDs - replace with your actual IDs'
         }
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
+      console.error('Error fetching production IDs:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
   },
 
-  // GET /api/admob/validate
+  // POST /api/admob/validate
   async validateConfig(req, res) {
     try {
-      const { environment = 'test' } = req.query;
-      const config = getAdMobConfig(environment);
-      const validation = {
-        environment,
-        isValid: true,
-        issues: [],
-        warnings: [],
-        summary: {}
-      };
+      const { environment, adType, config } = req.body;
       
-      // Validate App ID
-      if (!config.appId || config.appId === 'YOUR_PRODUCTION_APP_ID_HERE') {
-        validation.issues.push('App ID is missing or not configured');
-        validation.isValid = false;
+      if (!environment || !adType || !config) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Environment, ad type, and config are required' 
+        });
       }
-      
-      // Validate each ad unit
-      Object.keys(config.adUnits).forEach(adType => {
-        const adUnit = config.adUnits[adType];
-        const summary = {
-          adType,
-          hasId: !!adUnit.id,
-          isPlaceholder: adUnit.id && adUnit.id.startsWith('YOUR_'),
-          id: adUnit.id
-        };
-        
-        if (!adUnit.id) {
-          validation.issues.push(`Ad unit "${adType}" has no ID`);
-          validation.isValid = false;
-        } else if (adUnit.id.startsWith('YOUR_')) {
-          validation.warnings.push(`Ad unit "${adType}" uses placeholder ID: ${adUnit.id}`);
-        }
-        
-        validation.summary[adType] = summary;
-      });
-      
-      // Add metadata
-      validation.metadata = {
-        totalAdUnits: Object.keys(config.adUnits).length,
-        validAdUnits: Object.keys(config.adUnits).filter(adType => 
-          config.adUnits[adType].id && !config.adUnits[adType].id.startsWith('YOUR_')
-        ).length,
-        placeholderAdUnits: Object.keys(config.adUnits).filter(adType => 
-          config.adUnits[adType].id && config.adUnits[adType].id.startsWith('YOUR_')
-        ).length,
-        missingAdUnits: Object.keys(config.adUnits).filter(adType => 
-          !config.adUnits[adType].id
-        ).length,
-        validatedAt: new Date().toISOString()
+
+      const validation = {
+        isValid: true,
+        errors: [],
+        warnings: []
       };
-      
+
+      // Validate ad unit ID format
+      if (config.adUnitId) {
+        const adUnitIdPattern = /^ca-app-pub-\d+~\d+$|^ca-app-pub-\d+\/\d+$/;
+        if (!adUnitIdPattern.test(config.adUnitId)) {
+          validation.errors.push('Invalid ad unit ID format');
+          validation.isValid = false;
+        }
+      }
+
+      // Validate environment-specific rules
+      if (environment === 'production') {
+        if (config.adUnitId && config.adUnitId.includes('test')) {
+          validation.warnings.push('Production environment should not use test ad unit IDs');
+        }
+      }
+
+      // Validate ad type specific rules
+      if (adType === 'banner') {
+        if (config.refreshInterval && (config.refreshInterval < 30 || config.refreshInterval > 300)) {
+          validation.warnings.push('Banner refresh interval should be between 30 and 300 seconds');
+        }
+      }
+
+      if (adType === 'interstitial') {
+        if (config.minInterval && config.minInterval < 60) {
+          validation.warnings.push('Interstitial minimum interval should be at least 60 seconds');
+        }
+      }
+
       res.json({
         success: true,
-        data: validation
+        data: validation,
+        metadata: {
+          environment,
+          adType,
+          validatedAt: new Date().toISOString()
+        }
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
+      console.error('Error validating config:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
   },
 
@@ -367,40 +440,163 @@ const admobController = {
   // PUT /api/admob/config
   async updateConfig(req, res) {
     try {
-      const { environment = 'test' } = req.query;
-      const { appId, adUnits } = req.body;
+      const { environment, ...updateData } = req.body;
       
-      // Update the configuration (in a real app, this would be saved to database)
-      const config = getAdMobConfig(environment);
-      
-      if (appId) {
-        config.appId = appId;
-      }
-      
-      if (adUnits && typeof adUnits === 'object') {
-        Object.keys(adUnits).forEach(adType => {
-          if (config.adUnits[adType] && adUnits[adType].id) {
-            config.adUnits[adType].id = adUnits[adType].id;
-            if (adUnits[adType].name) config.adUnits[adType].name = adUnits[adType].name;
-            if (adUnits[adType].description) config.adUnits[adType].description = adUnits[adType].description;
-          }
+      if (!environment) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Environment is required' 
         });
       }
-      
+
+      // Find existing config or create new one
+      let config = await AdMobConfigModel.findOne({ 
+        where: { environment } 
+      });
+
+      if (config) {
+        // Update existing config
+        await config.update(updateData);
+      } else {
+        // Create new config
+        config = await AdMobConfigModel.create({
+          environment,
+          ...updateData
+        });
+      }
+
       res.json({
         success: true,
-        message: 'AdMob configuration updated successfully',
-        data: {
-          environment,
-          config,
+        data: config,
+        message: `AdMob configuration for ${environment} environment updated successfully`,
+        metadata: {
+          environment: config.environment,
           updatedAt: new Date().toISOString()
         }
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        error: error.message
+      console.error('Error updating AdMob config:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  // PUT /api/admob/config/:environment
+  async updateConfigByEnvironment(req, res) {
+    try {
+      const { environment } = req.params;
+      const updateData = req.body;
+
+      // Find existing config
+      let config = await AdMobConfigModel.findOne({ 
+        where: { environment } 
       });
+
+      if (!config) {
+        return res.status(404).json({ 
+          success: false, 
+          error: `No AdMob configuration found for environment: ${environment}` 
+        });
+      }
+
+      // Update the config
+      await config.update(updateData);
+
+      res.json({
+        success: true,
+        data: config,
+        message: `AdMob configuration for ${environment} environment updated successfully`,
+        metadata: {
+          environment: config.environment,
+          updatedAt: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Error updating AdMob config by environment:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  // GET /api/admob/config/:environment/:adType
+  async getAdTypeConfig(req, res) {
+    try {
+      const { environment, adType } = req.params;
+      
+      const config = await AdMobConfigModel.findOne({ 
+        where: { environment } 
+      });
+      
+      if (!config) {
+        return res.status(404).json({ 
+          success: false, 
+          error: `No AdMob configuration found for environment: ${environment}` 
+        });
+      }
+
+      const adTypeConfig = config[adType];
+      if (!adTypeConfig) {
+        return res.status(404).json({ 
+          success: false, 
+          error: `Ad type "${adType}" not found in ${environment} environment` 
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          environment,
+          adType,
+          config: adTypeConfig
+        },
+        metadata: {
+          retrievedAt: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching ad type config:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  // PUT /api/admob/config/:environment/:adType
+  async updateAdTypeConfig(req, res) {
+    try {
+      const { environment, adType } = req.params;
+      const updateData = req.body;
+      
+      const config = await AdMobConfigModel.findOne({ 
+        where: { environment } 
+      });
+      
+      if (!config) {
+        return res.status(404).json({ 
+          success: false, 
+          error: `No AdMob configuration found for environment: ${environment}` 
+        });
+      }
+
+      // Update the specific ad type configuration
+      const currentAdTypeConfig = config[adType] || {};
+      const updatedAdTypeConfig = { ...currentAdTypeConfig, ...updateData };
+      
+      await config.update({
+        [adType]: updatedAdTypeConfig
+      });
+
+      res.json({
+        success: true,
+        data: {
+          environment,
+          adType,
+          config: updatedAdTypeConfig
+        },
+        message: `${adType} configuration for ${environment} environment updated successfully`,
+        metadata: {
+          updatedAt: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Error updating ad type config:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
   }
 };

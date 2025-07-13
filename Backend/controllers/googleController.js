@@ -2,6 +2,7 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const { SavedKeyword, KeywordSearch } = require('../models');
 const { Op } = require('sequelize');
+const { getScrapingConfig, getEnvironmentInfo } = require('../config/scrapingConfig');
 
 puppeteer.use(StealthPlugin());
 
@@ -16,6 +17,9 @@ function stripHtmlTags(str) {
 
 // Helper function to create browser with retry logic
 async function createBrowserWithRetry(maxRetries = 3) {
+  const config = getScrapingConfig();
+  maxRetries = config.maxRetries;
+  
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Browser creation attempt ${attempt}/${maxRetries}`);
@@ -45,8 +49,8 @@ async function createBrowserWithRetry(maxRetries = 3) {
           '--disable-features=VizDisplayCompositor',
           '--window-size=1920,1080'
         ],
-        timeout: 30000,
-        protocolTimeout: 30000
+        timeout: config.timeout * 3, // Browser timeout
+        protocolTimeout: config.timeout * 3
       });
 
       // Test browser connection
@@ -108,21 +112,13 @@ async function checkAndMergeKeywordSearchData(user_id, query, platform, country,
       };
     }
 
-    // Find existing keyword search from today (within 24 hours)
-    const today = new Date();
-    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-    
+    // Find existing keyword search by query and platform only (ignore language/country)
     const existingSearch = await KeywordSearch.findOne({
       where: {
         user_id: validatedParams.user_id,
         query: validatedParams.query,
         platform: validatedParams.platform,
-        country: validatedParams.country,
-        language: validatedParams.language,
-        search_type: validatedParams.search_type,
-        created_at: {
-          [Op.gte]: yesterday
-        }
+        search_type: validatedParams.search_type
       },
       order: [['created_at', 'DESC']]
     });
@@ -161,6 +157,7 @@ async function checkAndMergeKeywordSearchData(user_id, query, platform, country,
         prepositions: mergedPrepositions,
         hashtags: mergedHashtags,
         generated_hashtags: mergedGeneratedHashtags,
+        views: (existingSearch.views || 0) + 1,
         all_data: {
           ...existingSearch.all_data,
           ...newData,
@@ -185,7 +182,8 @@ async function checkAndMergeKeywordSearchData(user_id, query, platform, country,
             hashtags: newHashtags.length,
             generated_hashtags: newGeneratedHashtags.length
           },
-          merge_count: (existingSearch.metadata?.merge_count || 0) + 1
+          merge_count: (existingSearch.metadata?.merge_count || 0) + 1,
+          last_view: new Date().toISOString()
         }
       });
       
@@ -362,16 +360,19 @@ async function checkAndMergeSavedKeywordData(user_id, query, platform, country, 
 
 // Helper function to make API requests with retry logic
 async function makeGoogleAPIRequest(page, search, language, country, maxRetries = 3) {
+  const config = getScrapingConfig();
+  maxRetries = config.maxRetries;
+  
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`API request attempt ${attempt}/${maxRetries} for: ${search}`);
       
-      const suggestions = await page.evaluate(async (search, language, country) => {
+      const suggestions = await page.evaluate(async (search, language, country, timeout) => {
         const url = `https://www.google.com/complete/search?q=${encodeURIComponent(search)}&cp=1&client=gws-wiz&xssi=t&hl=${language}&gl=${country}`;
         console.log('Fetching:', url);
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
         
         try {
           const response = await fetch(url, {
@@ -400,7 +401,7 @@ async function makeGoogleAPIRequest(page, search, language, country, maxRetries 
           clearTimeout(timeoutId);
           throw fetchError;
         }
-      }, search, language, country);
+      }, search, language, country, config.timeout);
 
       console.log(`API request successful for: ${search}`);
       return suggestions;
@@ -429,7 +430,10 @@ async function scrapeGoogleData(query, country = 'US', language = 'en') {
   let browser = null;
   
   try {
+    const config = getScrapingConfig();
     console.log(`Starting Google scraping for query: ${query}`);
+    console.log(`Environment: ${getEnvironmentInfo().isProduction ? 'production' : 'development'}, Online Server: ${getEnvironmentInfo().isOnlineServer}`);
+    console.log(`Configuration: ${config.maxAlphabetRequests} alphabet requests, ${config.maxQuestionRequests} question requests, ${config.requestDelay}ms delay`);
     
     // Create browser with retry logic
     browser = await createBrowserWithRetry();
@@ -437,8 +441,8 @@ async function scrapeGoogleData(query, country = 'US', language = 'en') {
     const page = await browser.newPage();
     
     // Set timeouts
-    await page.setDefaultTimeout(15000);
-    await page.setDefaultNavigationTimeout(15000);
+    await page.setDefaultTimeout(config.timeout);
+    await page.setDefaultNavigationTimeout(config.timeout);
     
     // Set user agent and viewport
     await page.setUserAgent(
@@ -481,30 +485,32 @@ async function scrapeGoogleData(query, country = 'US', language = 'en') {
     const mainSuggestions = await makeGoogleAPIRequest(page, query, language, country);
     mainSuggestions.forEach(s => allSuggestions.add(stripHtmlTags(s)));
 
-    // Get suggestions for keyword + each letter
+    // Get suggestions for keyword + each letter (limited based on environment)
     console.log('Fetching alphabet-based suggestions');
-    for (const letter of alphabet) {
+    const alphabetToUse = alphabet.slice(0, config.maxAlphabetRequests);
+    for (const letter of alphabetToUse) {
       const variant = `${query} ${letter}`;
       const suggestions = await makeGoogleAPIRequest(page, variant, language, country);
       suggestions.forEach(s => allSuggestions.add(stripHtmlTags(s)));
       
-      // Add small delay between requests to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Add delay between requests to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, config.requestDelay));
     }
 
-    // Aggregate question variations
+    // Aggregate question variations (limited based on environment)
     console.log('Fetching question-based suggestions');
     const questionPrefixes = [
       "how", "what", "why", "when", "where", "who", "which", "can", "is", "are", "do", "does", "did", "will", "should", "could", "would", "may", "might", "shall", "whose", "whom", "was", "were", "has", "have", "had", "am"
     ];
     
-    for (const prefix of questionPrefixes) {
+    const questionPrefixesToUse = questionPrefixes.slice(0, config.maxQuestionRequests);
+    for (const prefix of questionPrefixesToUse) {
       const variant = `${query} ${prefix}`;
       const suggestions = await makeGoogleAPIRequest(page, variant, language, country);
       suggestions.forEach(s => allSuggestions.add(stripHtmlTags(s)));
       
-      // Add small delay between requests
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Add delay between requests
+      await new Promise(resolve => setTimeout(resolve, config.requestDelay));
     }
 
     // Convert set to array and clean all suggestions
@@ -575,7 +581,17 @@ async function scrapeGoogleData(query, country = 'US', language = 'en') {
       `${query} how to`,
       `${query} what is`,
       `${query} benefits`,
-      `${query} features`
+      `${query} features`,
+      `${query} online`,
+      `${query} free`,
+      `${query} download`,
+      `${query} app`,
+      `${query} software`,
+      `${query} tool`,
+      `${query} platform`,
+      `${query} service`,
+      `${query} website`,
+      `${query} review`
     ];
     
     const fallbackQuestions = [
@@ -583,7 +599,12 @@ async function scrapeGoogleData(query, country = 'US', language = 'en') {
       `How to use ${query}?`,
       `Why use ${query}?`,
       `When to use ${query}?`,
-      `Where to find ${query}?`
+      `Where to find ${query}?`,
+      `Which ${query} is best?`,
+      `Can I use ${query} for free?`,
+      `How much does ${query} cost?`,
+      `Is ${query} safe?`,
+      `What are the benefits of ${query}?`
     ];
     
     const fallbackPrepositions = [
@@ -591,14 +612,25 @@ async function scrapeGoogleData(query, country = 'US', language = 'en') {
       `with ${query}`,
       `for ${query}`,
       `in ${query}`,
-      `on ${query}`
+      `on ${query}`,
+      `by ${query}`,
+      `from ${query}`,
+      `to ${query}`,
+      `of ${query}`,
+      `at ${query}`
     ];
     
     const fallbackHashtags = [
       `#${query.replace(/\s+/g, '')}`,
       `#${query.replace(/\s+/g, '').toLowerCase()}`,
       `#${query.replace(/\s+/g, '')}tips`,
-      `#${query.replace(/\s+/g, '')}guide`
+      `#${query.replace(/\s+/g, '')}guide`,
+      `#${query.replace(/\s+/g, '')}tutorial`,
+      `#${query.replace(/\s+/g, '')}howto`,
+      `#${query.replace(/\s+/g, '')}free`,
+      `#${query.replace(/\s+/g, '')}online`,
+      `#${query.replace(/\s+/g, '')}app`,
+      `#${query.replace(/\s+/g, '')}tool`
     ];
     
     console.log('Returning fallback data due to scraping error');
@@ -1340,16 +1372,81 @@ const googleController = {
       if (!query || !platform) {
         return res.status(400).json({ success: false, message: 'Missing query or platform' });
       }
-      const search = await KeywordSearch.findOne({
-        where: { query, platform, language, country }
+      
+      // First, analyze the database to find all records with the same query and platform
+      const allSearches = await KeywordSearch.findAll({
+        where: { 
+          query, 
+          platform 
+        },
+        order: [['likes', 'DESC'], ['created_at', 'DESC']] // Order by likes descending, then by creation date
       });
-      if (!search) {
-        return res.status(404).json({ success: false, message: 'Keyword search not found' });
+      
+      if (allSearches.length > 0) {
+        // Find the record with the most likes (first in the sorted array)
+        const mostLikedSearch = allSearches[0];
+        
+        // Increment likes for the record with the most likes
+        mostLikedSearch.likes = (mostLikedSearch.likes || 0) + 1;
+        await mostLikedSearch.save();
+        
+        console.log(`✅ Like added to record with most likes: ${query} (${platform}) - Record ID: ${mostLikedSearch.id} - Total likes: ${mostLikedSearch.likes}`);
+        console.log(`📊 Found ${allSearches.length} total records for this query/platform combination`);
+        
+        // Log details about all records found
+        allSearches.forEach((search, index) => {
+          console.log(`  ${index + 1}. ID: ${search.id}, Likes: ${search.likes || 0}, Created: ${search.created_at}, Language: ${search.language}, Country: ${search.country}`);
+        });
+        
+        return res.json({ 
+          success: true, 
+          likes: mostLikedSearch.likes,
+          recordId: mostLikedSearch.id,
+          totalRecords: allSearches.length,
+          message: `Like added to record with most likes (${mostLikedSearch.likes} total)`
+        });
+      } else {
+        // Create new search record with 1 like if no records exist
+        const newSearch = await KeywordSearch.create({
+          query,
+          platform,
+          search_type: 'all',
+          language,
+          country,
+          keywords: [],
+          questions: [],
+          prepositions: [],
+          hashtags: [],
+          generated_hashtags: [],
+          all_data: {},
+          response_time: null,
+          status: 'success',
+          ip_address: req.ip,
+          user_agent: req.get('User-Agent'),
+          session_id: req.session?.id,
+          is_cached: false,
+          cache_hit: false,
+          likes: 1,
+          views: 0,
+          metadata: {
+            search_type: 'all',
+            platform,
+            user_ip: req.ip,
+            created_from_like: true,
+            first_like: new Date().toISOString()
+          }
+        });
+        console.log(`✅ Created new search record from like: ${query} (${platform}) - Likes: 1`);
+        return res.json({ 
+          success: true, 
+          likes: 1, 
+          created: true,
+          recordId: newSearch.id,
+          message: "New record created with 1 like"
+        });
       }
-      search.likes = (search.likes || 0) + 1;
-      await search.save();
-      return res.json({ success: true, likes: search.likes });
     } catch (err) {
+      console.error('❌ Error tracking like:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   },
@@ -1378,21 +1475,48 @@ const googleController = {
         where,
         order,
       });
-      // Deduplicate: only keep the latest for each (query, platform, search_type)
-      const seen = new Set();
-      const trending = [];
+      
+      // Group by query and platform, aggregate views and likes
+      const grouped = {};
       for (const k of all) {
-        const key = `${k.query}|${k.platform}|${k.search_type}`;
-        if (!seen.has(key)) {
-          trending.push({
+        const key = `${k.query}|${k.platform}`;
+        if (!grouped[key]) {
+          grouped[key] = {
             ...k.toJSON(),
-            created_at: k.created_at instanceof Date ? k.created_at.toISOString() : (typeof k.created_at === 'string' ? k.created_at : ''),
-            views: k.views
-          });
-          seen.add(key);
+            total_views: 0,
+            total_likes: 0,
+            records: []
+          };
         }
-        if (trending.length >= limit) break;
+        grouped[key].total_views += (k.views || 0);
+        grouped[key].total_likes += (k.likes || 0);
+        grouped[key].records.push(k);
       }
+      
+      // Convert to array and sort based on the requested sort parameter
+      let trending = Object.values(grouped)
+        .map(item => ({
+          ...item,
+          views: item.total_views, // Use aggregated views
+          likes: item.total_likes, // Use aggregated likes
+          created_at: item.created_at instanceof Date ? item.created_at.toISOString() : (typeof item.created_at === 'string' ? item.created_at : ''),
+          // Remove internal fields
+          total_views: undefined,
+          total_likes: undefined,
+          records: undefined
+        }));
+      
+      // Sort based on the requested sort parameter
+      if (sort === 'views') {
+        trending.sort((a, b) => b.views - a.views);
+      } else if (sort === 'recent') {
+        trending.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      } else {
+        trending.sort((a, b) => b.likes - a.likes);
+      }
+      
+      trending = trending.slice(0, limit);
+      
       return res.json({ success: true, data: trending });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -1409,16 +1533,59 @@ const googleController = {
       if (!query || !platform) {
         return res.status(400).json({ success: false, message: 'Missing query or platform' });
       }
+      
+      // Find existing search record by query and platform only (ignore language/country)
       const search = await KeywordSearch.findOne({
-        where: { query, platform, language, country }
+        where: { 
+          query, 
+          platform 
+        },
+        order: [['created_at', 'DESC']] // Get the most recent one
       });
-      if (!search) {
-        return res.status(404).json({ success: false, message: 'Keyword search not found' });
+      
+      if (search) {
+        // Increment views for existing search
+        search.views = (search.views || 0) + 1;
+        await search.save();
+        console.log(`✅ View incremented for existing search: ${query} (${platform}) - Total views: ${search.views}`);
+      } else {
+        // Create new search record with 1 view if it doesn't exist
+        const newSearch = await KeywordSearch.create({
+          query,
+          platform,
+          search_type: 'all',
+          language,
+          country,
+          keywords: [],
+          questions: [],
+          prepositions: [],
+          hashtags: [],
+          generated_hashtags: [],
+          all_data: {},
+          response_time: null,
+          status: 'success',
+          ip_address: req.ip,
+          user_agent: req.get('User-Agent'),
+          session_id: req.session?.id,
+          is_cached: false,
+          cache_hit: false,
+          likes: 0,
+          views: 1,
+          metadata: {
+            search_type: 'all',
+            platform,
+            user_ip: req.ip,
+            created_from_view: true,
+            first_view: new Date().toISOString()
+          }
+        });
+        console.log(`✅ Created new search record from view: ${query} (${platform}) - Views: 1`);
+        return res.json({ success: true, views: 1, created: true });
       }
-      search.views = (search.views || 0) + 1;
-      await search.save();
+      
       return res.json({ success: true, views: search.views });
     } catch (err) {
+      console.error('❌ Error tracking view:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }

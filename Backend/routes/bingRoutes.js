@@ -4,7 +4,10 @@ const {
   getBingKeywords,
   getBingQuestions,
   getBingPrepositions,
-  getBingHashtags
+  getBingHashtags,
+  likeKeywordSearch,
+  viewKeywordSearch,
+  getTrendingKeywords
 } = require('../controllers/bingController');
 
 router.get('/keywords', getBingKeywords);
@@ -14,16 +17,16 @@ router.get('/hashtags', getBingHashtags);
 router.get('/all', getBingKeywords);
 
 // Like a keyword search
-router.post('/like', bingController.likeKeywordSearch);
+router.post('/like', likeKeywordSearch);
 
 // Get trending keywords
-router.get('/trending', bingController.getTrendingKeywords);
+router.get('/trending', getTrendingKeywords);
 
 // Increment views for a keyword search
-router.post('/view', bingController.viewKeywordSearch);
+router.post('/view', viewKeywordSearch);
 
 // Export handlers for global use
 module.exports = router;
-module.exports.likeKeywordSearch = bingController.likeKeywordSearch;
-module.exports.getTrendingKeywords = bingController.getTrendingKeywords;
-module.exports.viewKeywordSearch = bingController.viewKeywordSearch; 
+module.exports.likeKeywordSearch = likeKeywordSearch;
+module.exports.getTrendingKeywords = getTrendingKeywords;
+module.exports.viewKeywordSearch = viewKeywordSearch; 

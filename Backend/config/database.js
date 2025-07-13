@@ -4,10 +4,10 @@ require('dotenv').config();
 // Database configuration
 const config = {
   development: {
-    username: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'ai_hashtag_generator',
-    host: process.env.DB_HOST || 'localhost',
+    username: process.env.DB_USER || 'nazaarab_keywords',
+    password: process.env.DB_PASSWORD || 'asdfqwer1234asdfqwer12341234',
+    database: process.env.DB_NAME || 'nazaarab_keywords',
+    host: process.env.DB_HOST || 's26.hosterpk.com',
     port: process.env.DB_PORT || 3306,
     dialect: 'mysql',
     logging: console.log,
@@ -66,8 +66,12 @@ const config = {
 };
 
 // Get current environment
-const env = process.env.NODE_ENV || 'development';
+const env = (process.env.NODE_ENV || 'development').trim();
 const currentConfig = config[env];
+
+if (!currentConfig) {
+  throw new Error(`No database config found for environment: ${env}. Please set NODE_ENV to one of: ${Object.keys(config).join(', ')}`);
+}
 
 // Create Sequelize instance
 const sequelize = new Sequelize(
@@ -101,4 +105,7 @@ module.exports = {
   config,
   testConnection,
   env
-}; 
+};
+
+// Export config for sequelize-cli
+module.exports.config = config; 

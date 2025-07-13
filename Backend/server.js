@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const { Op, fn, col, literal } = require('sequelize');
 
 // Disable caching for all /api routes
 const app = express();
@@ -41,6 +42,165 @@ app.post('/api/like', googleRoutes.likeKeywordSearch);
 app.get('/api/trending', googleRoutes.getTrendingKeywords);
 app.post('/api/view', googleRoutes.viewKeywordSearch);
 
+// Global most views and most likes endpoints
+app.get('/api/most-views', async (req, res) => {
+  try {
+    const { KeywordSearch } = require('./models');
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const { platform, search_type } = req.query;
+    // --- Range filter ---
+    const range = req.query.range || 'week';
+    let since = new Date();
+    if (range === 'today') {
+      since.setHours(0, 0, 0, 0);
+    } else if (range === 'week') {
+      since.setDate(since.getDate() - 7);
+    } else if (range === 'month') {
+      since.setDate(since.getDate() - 30);
+    }
+    // ---
+    const where = { views: { [require('sequelize').Op.gt]: 0 }, created_at: { [Op.gte]: since } };
+    if (platform && platform !== 'all') where.platform = platform;
+    if (search_type && search_type !== 'all') where.search_type = search_type;
+    
+    const all = await KeywordSearch.findAll({
+      where,
+      order: [['views', 'DESC'], ['created_at', 'DESC']],
+    });
+    
+    // Group by query and platform, aggregate views and likes
+    const grouped = {};
+    for (const k of all) {
+      const key = `${k.query}|${k.platform}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          ...k.toJSON(),
+          total_views: 0,
+          total_likes: 0,
+          records: []
+        };
+      }
+      grouped[key].total_views += (k.views || 0);
+      grouped[key].total_likes += (k.likes || 0);
+      grouped[key].records.push(k);
+    }
+    
+    // Convert to array and sort by total views
+    const mostViewed = Object.values(grouped)
+      .map(item => ({
+        ...item,
+        views: item.total_views, // Use aggregated views
+        likes: item.total_likes, // Use aggregated likes
+        created_at: item.created_at instanceof Date ? item.created_at.toISOString() : (typeof item.created_at === 'string' ? item.created_at : ''),
+        // Remove internal fields
+        total_views: undefined,
+        total_likes: undefined,
+        records: undefined
+      }))
+      .sort((a, b) => b.views - a.views)
+      .slice(0, limit);
+    
+    return res.json({ success: true, data: mostViewed });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/most-likes', async (req, res) => {
+  try {
+    const { KeywordSearch } = require('./models');
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const { platform, search_type } = req.query;
+    // --- Range filter ---
+    const range = req.query.range || 'week';
+    let since = new Date();
+    if (range === 'today') {
+      since.setHours(0, 0, 0, 0);
+    } else if (range === 'week') {
+      since.setDate(since.getDate() - 7);
+    } else if (range === 'month') {
+      since.setDate(since.getDate() - 30);
+    }
+    // ---
+    const where = { likes: { [require('sequelize').Op.gt]: 0 }, created_at: { [Op.gte]: since } };
+    if (platform && platform !== 'all') where.platform = platform;
+    if (search_type && search_type !== 'all') where.search_type = search_type;
+    
+    const all = await KeywordSearch.findAll({
+      where,
+      order: [['likes', 'DESC'], ['created_at', 'DESC']],
+    });
+    
+    // Group by query and platform, aggregate views and likes
+    const grouped = {};
+    for (const k of all) {
+      const key = `${k.query}|${k.platform}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          ...k.toJSON(),
+          total_views: 0,
+          total_likes: 0,
+          records: []
+        };
+      }
+      grouped[key].total_views += (k.views || 0);
+      grouped[key].total_likes += (k.likes || 0);
+      grouped[key].records.push(k);
+    }
+    
+    // Convert to array and sort by total likes
+    const mostLiked = Object.values(grouped)
+      .map(item => ({
+        ...item,
+        views: item.total_views, // Use aggregated views
+        likes: item.total_likes, // Use aggregated likes
+        created_at: item.created_at instanceof Date ? item.created_at.toISOString() : (typeof item.created_at === 'string' ? item.created_at : ''),
+        // Remove internal fields
+        total_views: undefined,
+        total_likes: undefined,
+        records: undefined
+      }))
+      .sort((a, b) => b.likes - a.likes)
+      .slice(0, limit);
+    
+    return res.json({ success: true, data: mostLiked });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/search-activity', async (req, res) => {
+  try {
+    const { KeywordSearch } = require('./models');
+    // Optional: support ?range=week|month|year
+    const range = req.query.range || 'month';
+    let dateFormat = '%Y-%m-%d';
+    let since = new Date();
+    if (range === 'week') {
+      since.setDate(since.getDate() - 7);
+    } else if (range === 'month') {
+      since.setMonth(since.getMonth() - 1);
+    } else if (range === 'year') {
+      since.setFullYear(since.getFullYear() - 1);
+    }
+    // Group by date, count searches
+    const results = await KeywordSearch.findAll({
+      attributes: [
+        [fn('DATE_FORMAT', col('created_at'), dateFormat), 'date'],
+        [fn('COUNT', col('id')), 'count']
+      ],
+      where: {
+        created_at: { [Op.gte]: since }
+      },
+      group: [literal('date')],
+      order: [[literal('date'), 'ASC']]
+    });
+    res.json({ success: true, data: results.map(r => r.toJSON()) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
@@ -57,6 +217,13 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/health',
+      global: {
+        like: '/api/like',
+        view: '/api/view',
+        trending: '/api/trending',
+        mostViews: '/api/most-views',
+        mostLikes: '/api/most-likes'
+      },
       google: {
         keywords: '/api/google/keywords',
         questions: '/api/google/questions',
@@ -156,6 +323,9 @@ async function startServer() {
       console.log(`🚀 AI Hashtag Generator Backend running on http://localhost:${PORT}`);
       console.log(`📊 Available endpoints:`);
       console.log(`   - Health check: http://localhost:${PORT}/health`);
+      console.log(`   - Global trending: http://localhost:${PORT}/api/trending`);
+      console.log(`   - Global most views: http://localhost:${PORT}/api/most-views`);
+      console.log(`   - Global most likes: http://localhost:${PORT}/api/most-likes`);
       console.log(`   - Google keywords: http://localhost:${PORT}/api/google/keywords?query=fitness`);
       console.log(`   - Google questions: http://localhost:${PORT}/api/google/questions?query=fitness`);
       console.log(`   - Google prepositions: http://localhost:${PORT}/api/google/prepositions?query=fitness`);

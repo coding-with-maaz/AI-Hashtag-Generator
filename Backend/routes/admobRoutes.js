@@ -5,10 +5,10 @@ const admobController = require('../controllers/admobController');
 // Middleware to validate environment parameter
 const validateEnvironment = (req, res, next) => {
   const { environment } = req.query;
-  if (environment && !['test', 'production'].includes(environment)) {
+  if (environment && !['test', 'production', 'staging'].includes(environment)) {
     return res.status(400).json({ 
       error: 'Invalid environment parameter',
-      message: 'Environment must be either "test" or "production"'
+      message: 'Environment must be either "test", "production", or "staging"'
     });
   }
   next();
@@ -18,14 +18,14 @@ const validateEnvironment = (req, res, next) => {
 const validateAdType = (req, res, next) => {
   const { adType } = req.params;
   const validTypes = [
-    'appOpen',
-    'adaptiveBanner', 
-    'fixedBanner',
+    'banner',
     'interstitial',
     'rewarded',
-    'rewardedInterstitial',
     'native',
-    'nativeVideo'
+    'appOpen',
+    'splash',
+    'custom',
+    'rewardedInterstitial'
   ];
   
   if (!validTypes.includes(adType)) {
@@ -39,24 +39,28 @@ const validateAdType = (req, res, next) => {
 };
 
 // Route: GET /api/admob/config
-// Description: Get complete AdMob configuration for specified environment
+// Description: Get all AdMob configurations or specific environment
 router.get('/config', validateEnvironment, admobController.getConfig);
 
-// Route: GET /api/admob/app-id
-// Description: Get AdMob App ID for specified environment
-router.get('/app-id', validateEnvironment, admobController.getAppId);
+// Route: GET /api/admob/config/:environment
+// Description: Get AdMob configuration for specific environment
+router.get('/config/:environment', admobController.getConfigByEnvironment);
 
-// Route: GET /api/admob/ad-units
-// Description: Get all ad units for specified environment
-router.get('/ad-units', validateEnvironment, admobController.getAllAdUnits);
+// Route: GET /api/admob/config/:environment/:adType
+// Description: Get specific ad type configuration for environment
+router.get('/config/:environment/:adType', validateAdType, admobController.getAdTypeConfig);
 
-// Route: GET /api/admob/ad-units/:adType
-// Description: Get specific ad unit ID for specified environment and ad type
-router.get('/ad-units/:adType', validateEnvironment, validateAdType, admobController.getAdUnit);
+// Route: PUT /api/admob/config
+// Description: Update AdMob configuration (requires environment in body)
+router.put('/config', admobController.updateConfig);
 
-// Route: GET /api/admob/ad-units/:adType/id
-// Description: Get only the ad unit ID (string) for specified environment and ad type
-router.get('/ad-units/:adType/id', validateEnvironment, validateAdType, admobController.getAdUnitId);
+// Route: PUT /api/admob/config/:environment
+// Description: Update AdMob configuration for specific environment
+router.put('/config/:environment', admobController.updateConfigByEnvironment);
+
+// Route: PUT /api/admob/config/:environment/:adType
+// Description: Update specific ad type configuration for environment
+router.put('/config/:environment/:adType', validateAdType, admobController.updateAdTypeConfig);
 
 // Route: GET /api/admob/test-ids
 // Description: Get all test ad unit IDs (for development)
@@ -66,20 +70,8 @@ router.get('/test-ids', admobController.getTestIds);
 // Description: Get all production ad unit IDs (for production)
 router.get('/production-ids', admobController.getProductionIds);
 
-// Route: GET /api/admob/validate
+// Route: POST /api/admob/validate
 // Description: Validate ad unit configuration
-router.get('/validate', validateEnvironment, admobController.validateConfig);
-
-// Route: PUT /api/admob/app-id
-// Description: Update AdMob App ID for specified environment
-router.put('/app-id', validateEnvironment, admobController.updateAppId);
-
-// Route: PUT /api/admob/ad-units/:adType
-// Description: Update specific ad unit for specified environment
-router.put('/ad-units/:adType', validateEnvironment, validateAdType, admobController.updateAdUnit);
-
-// Route: PUT /api/admob/config
-// Description: Update complete AdMob configuration for specified environment
-router.put('/config', validateEnvironment, admobController.updateConfig);
+router.post('/validate', admobController.validateConfig);
 
 module.exports = router; 

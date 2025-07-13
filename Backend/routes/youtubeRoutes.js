@@ -4,7 +4,10 @@ const {
   getYouTubeKeywords,
   getYouTubeQuestions,
   getYouTubePrepositions,
-  getYouTubeHashtags
+  getYouTubeHashtags,
+  likeKeywordSearch,
+  viewKeywordSearch,
+  getTrendingKeywords
 } = require('../controllers/youtubeController');
 
 /**
@@ -58,16 +61,16 @@ router.get('/hashtags', getYouTubeHashtags);
 router.get('/all', getYouTubeKeywords);
 
 // Like a keyword search
-router.post('/like', youtubeController.likeKeywordSearch);
+router.post('/like', likeKeywordSearch);
 
 // Get trending keywords
-router.get('/trending', youtubeController.getTrendingKeywords);
+router.get('/trending', getTrendingKeywords);
 
 // Increment views for a keyword search
-router.post('/view', youtubeController.viewKeywordSearch);
+router.post('/view', viewKeywordSearch);
 
 // Export handlers for global use
 module.exports = router;
-module.exports.likeKeywordSearch = youtubeController.likeKeywordSearch;
-module.exports.getTrendingKeywords = youtubeController.getTrendingKeywords;
-module.exports.viewKeywordSearch = youtubeController.viewKeywordSearch; 
+module.exports.likeKeywordSearch = likeKeywordSearch;
+module.exports.getTrendingKeywords = getTrendingKeywords;
+module.exports.viewKeywordSearch = viewKeywordSearch; 

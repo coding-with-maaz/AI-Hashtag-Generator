@@ -3,7 +3,10 @@ const router = express.Router();
 const {
   getAppStoreKeywords,
   getAppStoreApps,
-  getAppStoreGames
+  getAppStoreGames,
+  likeKeywordSearch,
+  viewKeywordSearch,
+  getTrendingKeywords
 } = require('../controllers/appstoreController');
 
 /**
@@ -47,16 +50,16 @@ router.get('/games', getAppStoreGames);
 router.get('/all', getAppStoreKeywords);
 
 // Like a keyword search
-router.post('/like', appstoreController.likeKeywordSearch);
+router.post('/like', likeKeywordSearch);
 
 // Get trending keywords
-router.get('/trending', appstoreController.getTrendingKeywords);
+router.get('/trending', getTrendingKeywords);
 
 // Increment views for a keyword search
-router.post('/view', appstoreController.viewKeywordSearch);
+router.post('/view', viewKeywordSearch);
 
 // Export handlers for global use
 module.exports = router;
-module.exports.likeKeywordSearch = appstoreController.likeKeywordSearch;
-module.exports.getTrendingKeywords = appstoreController.getTrendingKeywords;
-module.exports.viewKeywordSearch = appstoreController.viewKeywordSearch; 
+module.exports.likeKeywordSearch = likeKeywordSearch;
+module.exports.getTrendingKeywords = getTrendingKeywords;
+module.exports.viewKeywordSearch = viewKeywordSearch; 
